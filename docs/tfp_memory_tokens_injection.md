@@ -1,0 +1,57 @@
+# TFP Memory Tokens Injection
+
+This figure matches the older `tfp` temporal-memory model, not the newer `tfp_adaln*` line.
+
+In `tfp`, the memory branch produces explicit `memory_tokens`, and those tokens are injected into the suffix
+transformer through memory cross-attention.
+
+Source: [docs/tfp_memory_tokens_injection.mmd](../docs/tfp_memory_tokens_injection.mmd)
+
+```mermaid
+flowchart LR
+    subgraph MemoryBranch["Memory Branch: build memory tokens"]
+        A1["RGB images\n3 camera views"] --> A2["SigLIP image encoder"]
+        A2 --> A3["visual tokens"]
+
+        B1["robot state"] --> B2["state_proj"]
+        B2 --> B3["state token"]
+
+        C1["previous hidden h_{t-1}"] --> C4["LTCEncoder.step"]
+        C2["delta_t"] --> C4
+
+        A3 --> C3["concat"]
+        B3 --> C3
+        C3 --> C4
+
+        C4 --> D1["updated hidden h_t"]
+        D1 --> D2["memory_token_proj"]
+        D2 --> D3["reshape"]
+        D3 --> D4["memory tokens\n[B, M, W]"]
+        D5["chunk mask"] --> D6["memory mask"]
+        D4 --> D6
+    end
+
+    subgraph MainModel["Main Model: inject memory tokens"]
+        E1["prefix tokens\nimage + prompt"] --> E4["PaliGemma.llm"]
+        E2["suffix tokens\nnoisy action chunk"] --> E4
+        E3["time-based adarms_cond"] --> E4
+
+        D4 --> F1["memory cross-attn"]
+        D6 --> F1
+        F2["cross_attn_enabled\n(last K suffix layers)"] --> F1
+        F1 --> E4
+
+        E4 --> G1["suffix_out"]
+        G1 --> G2["action_out_proj"]
+        G2 --> G3["predicted action chunk"]
+    end
+
+    H1["Important\nmemory tokens are not fused into prefix tokens;\nthey are read by dedicated suffix-layer cross-attention"] --- F1
+```
+
+Relevant code:
+
+- [src/openpi/models/pi0.py](../src/openpi/models/pi0.py:257)
+- [src/openpi/models/pi0.py](../src/openpi/models/pi0.py:332)
+- [src/openpi/models/pi0.py](../src/openpi/models/pi0.py:358)
+- [src/openpi/models/pi0.py](../src/openpi/models/pi0.py:467)

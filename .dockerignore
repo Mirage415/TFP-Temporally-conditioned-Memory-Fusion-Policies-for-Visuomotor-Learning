@@ -1,0 +1,8 @@
+.venv
+.git
+checkpoints
+data
+assets
+experiments
+outputs
+wandb
